@@ -86,7 +86,8 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
         # rep box loss is sum of IOUs of boxes with different GT
         # targets
         num_gts = torch.max(self.gt_box_inds) + 1
-        sum = torch.tensor(0.0)
+        device = self.pred_proposal_deltas.device
+        sum = torch.tensor(0.0, device=device)
         for i in range(num_gts):
             boxes_i = fg_boxes[fg_gt_inds == i]
             for j in range(num_gts):
