@@ -37,8 +37,14 @@ def smooth_ln(x, sigma):
 
 class RepLossFastRCNNOutputs(FastRCNNOutputs):
 
-    def __init__(self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals, smooth_l1_beta):
+    def __init__(self, box2box_transform, pred_class_logits, pred_proposal_deltas, proposals, smooth_l1_beta,
+                    rep_gt_factor, rep_box_factor, rep_gt_sigma, rep_box_sigma, d2_normalize):
         super().__init__(box2box_transform, pred_class_logits, pred_proposal_deltas, proposals, smooth_l1_beta)
+        self.rep_gt_factor = rep_gt_factor
+        self.rep_box_factor = rep_box_factor
+        self.rep_gt_sigma = rep_gt_sigma
+        self.rep_box_sigma = rep_box_sigma
+        self.d2_normalize = d2_normalize
         if proposals[0].has("gt_boxes"):
             assert proposals[0].has("gt_classes")
             self.gt_classes = cat([p.gt_classes for p in proposals], dim=0)
@@ -58,11 +64,17 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
         repulsion_targets = repulsion_targets[inds]
 
         # calculate loss
-        # as in FastRCNNOutputs:smooth_l1_loss, divide by total examples instead of total
-        # foreground examples to weight each foreground example the same
         iogs = self.IoG(repulsion_targets, box_preds)
-        losses = self.smooth_ln(iogs, sigma=0.9)
-        loss_rep_gt = torch.sum(losses) / self.gt_classes.numel()
+        losses = self.smooth_ln(iogs, sigma=self.rep_gt_sigma)
+
+        if self.d2_normalize:
+            # if 'Detectron2 normalize' enabled:
+            # as in FastRCNNOutputs:smooth_l1_loss, divide by total examples instead of total
+            # foreground examples to weight each foreground example the same
+            loss_rep_gt = torch.sum(losses) / self.gt_classes.numel()
+        else:
+            # or, normalize like in the paper
+            loss_rep_gt = torch.mean(losses)
 
         # print("loss_rep_gt", loss_rep_gt)
         return loss_rep_gt
@@ -88,37 +100,42 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
         num_gts = torch.max(self.gt_box_inds) + 1
         device = self.pred_proposal_deltas.device
         sum = torch.tensor(0.0, device=device)
+        num_examples = torch.tensor(0.0, device=device)
         for i in range(num_gts):
             boxes_i = fg_boxes[fg_gt_inds == i]
             for j in range(num_gts):
                 boxes_j = fg_boxes[fg_gt_inds == j]
                 if i != j:
                     iou_matrix = pairwise_iou(boxes_i, boxes_j)
-                    losses = smooth_ln(iou_matrix, sigma=0.1)
+                    losses = smooth_ln(iou_matrix, sigma=self.rep_box_sigma)
                     sum += torch.sum(iou_matrix)
+                    num_examples += 1.0
         
         # every i,j was counted twice
         sum /= 2.0
+        num_examples /= 2.0
 
-        # as in FastRCNNOutputs:smooth_l1_loss, divide by total examples instead of total
-        # foreground examples to weight each foreground example the same
-        loss_rep_box = sum / self.gt_classes.numel()
+        if self.d2_normalize:
+            # if 'Detectron2 loss' enabled:
+            # as in FastRCNNOutputs:smooth_l1_loss, divide by total examples instead of total
+            # foreground examples to weight each foreground example the same
+            loss_rep_box = sum / self.gt_classes.numel()
+        elif num_examples > 0:
+            loss_rep_box = sum / num_examples
+        else:
+            loss_rep_box = sum # = 0.0
 
         # print("loss_rep_box", loss_rep_box)
         return loss_rep_box
 
     def repulsion_loss(self):
-        # TODO
-        a=0.5
-        b=0.5
-        
         # note that all loss components normalize using the total number of regions, rather than the
         # number of foreground (positive proposal) regions - see explanation in smooth_l1_loss()
         loss_attr = self.smooth_l1_loss()
         loss_rep_gt = self.rep_gt_loss()
         loss_rep_box = self.rep_box_loss()
 
-        repulsion_loss = loss_attr +  a*loss_rep_gt + b*loss_rep_box
+        repulsion_loss = loss_attr +  self.rep_gt_factor*loss_rep_gt + self.rep_box_factor*loss_rep_box
         return repulsion_loss
 
     def losses(self):

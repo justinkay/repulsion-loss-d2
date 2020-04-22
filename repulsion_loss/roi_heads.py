@@ -17,7 +17,13 @@ class RepLossROIHeads(StandardROIHeads):
 
     def __init__(self, cfg, input_shape):
         super().__init__(cfg, input_shape)
-        
+
+        self.rep_gt_factor = cfg.MODEL.ROI_HEADS.REPULSION_LOSS.REP_GT_FACTOR
+        self.rep_box_factor = cfg.MODEL.ROI_HEADS.REPULSION_LOSS.REP_BOX_FACTOR
+        self.rep_gt_sigma = cfg.MODEL.ROI_HEADS.REPULSION_LOSS.REP_GT_SIGMA
+        self.rep_box_sigma = cfg.MODEL.ROI_HEADS.REPULSION_LOSS.REP_BOX_SIGMA
+        self.d2_normalize = cfg.MODEL.ROI_HEADS.REPULSION_LOSS.D2_NORMALIZE
+
         self.proposal_matcher = Top2Matcher(
             cfg.MODEL.ROI_HEADS.IOU_THRESHOLDS,
             cfg.MODEL.ROI_HEADS.IOU_LABELS,
@@ -77,6 +83,11 @@ class RepLossROIHeads(StandardROIHeads):
             pred_proposal_deltas,
             proposals,
             self.smooth_l1_beta,
+            self.rep_gt_factor, 
+            self.rep_box_factor, 
+            self.rep_gt_sigma, 
+            self.rep_box_sigma, 
+            self.d2_normalize
         )
         if self.training:
             return outputs.losses()
