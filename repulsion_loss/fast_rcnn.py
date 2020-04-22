@@ -64,7 +64,7 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
         losses = self.smooth_ln(iogs, sigma=0.9)
         loss_rep_gt = torch.sum(losses) / self.gt_classes.numel()
 
-        print("loss_rep_gt", loss_rep_gt)
+        # print("loss_rep_gt", loss_rep_gt)
         return loss_rep_gt
 
     def rep_box_loss(self):
@@ -104,7 +104,7 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
         # foreground examples to weight each foreground example the same
         loss_rep_box = sum / self.gt_classes.numel()
 
-        print("loss_rep_box", loss_rep_box)
+        # print("loss_rep_box", loss_rep_box)
         return loss_rep_box
 
     def repulsion_loss(self):
