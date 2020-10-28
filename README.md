@@ -20,7 +20,7 @@ Then, simply:
 from detectron2.config import get_cfg
 
 from repulsion_loss.config import add_reploss_config
-
+import repulsion_loss.roi_heads
 
 cfg = get_cfg()
 add_reploss_config(cfg)
