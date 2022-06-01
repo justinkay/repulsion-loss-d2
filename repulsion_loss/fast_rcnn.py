@@ -49,6 +49,8 @@ class RepLossFastRCNNOutputs(FastRCNNOutputs):
             assert proposals[0].has("gt_classes")
             self.gt_classes = cat([p.gt_classes for p in proposals], dim=0)
             self.gt_box_inds = cat([p.gt_box_inds for p in proposals], dim=0)
+        if proposals[0].has("gt_rep_boxes"):
+            self.gt_rep_boxes = cat([p.gt_rep_boxes for p in proposals], dim=0)
 
     def rep_gt_loss(self):
         # get all predicted boxes in this minibatch; meaning all proposals + all predicted box regression deltas
